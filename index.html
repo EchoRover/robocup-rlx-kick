@@ -6,108 +6,110 @@
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#141416;--panel:#1c1c20;--ink:#ececee;--muted:#9a9aa2;--line:#33333a;--accent:#6c9cff;--good:#4cc47e;--bad:#ff6b5e;--soft:#22283a;color-scheme:dark}}
 :root[data-theme="dark"]{--bg:#141416;--panel:#1c1c20;--ink:#ececee;--muted:#9a9aa2;--line:#33333a;--accent:#6c9cff;--good:#4cc47e;--bad:#ff6b5e;--soft:#22283a;color-scheme:dark}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding-inline:16px}
-main{max-width:900px;margin:0 auto;padding-block:32px 80px}
-h1{font-size:30px;margin:0 0 4px;text-wrap:balance}
-h2{font-size:22px;margin:34px 0 10px}
-.sub{color:var(--muted);margin:0 0 8px}
-.step{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0;display:grid;gap:6px}
-.when{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
-.row{display:grid;grid-template-columns:110px 1fr;gap:4px 12px}
-.row b{color:var(--muted);font-size:14px;text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding-inline:16px}
+main{max-width:860px;margin:0 auto;padding-block:32px 80px}
+h1{font-size:30px;margin:0 0 6px;text-wrap:balance}
+h2{font-size:23px;margin:36px 0 10px}
+.sub{color:var(--muted);margin:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0}
+.card h3{margin:0 0 8px;font-size:19px}
+.card p{margin:6px 0}
+.word{display:grid;grid-template-columns:150px 1fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.word:last-child{border-bottom:0}
+.word b{font-size:17px}
 .bad{color:var(--bad);font-weight:700}.good{color:var(--good);font-weight:700}
-video{width:100%;border-radius:10px;border:1px solid var(--line);background:#000;margin-top:6px}
-.say{border-left:4px solid var(--accent);background:var(--soft);padding:10px 14px;border-radius:0 8px 8px 0}
+.why{border-left:4px solid var(--accent);background:var(--soft);padding:8px 12px;border-radius:0 8px 8px 0;margin:8px 0}
+video{width:100%;border-radius:10px;border:1px solid var(--line);background:#000;margin-top:8px}
 a{color:var(--accent)}
-@media (max-width:560px){.row{grid-template-columns:1fr}}
+@media (max-width:560px){.word{grid-template-columns:1fr;gap:2px}}
 </style></head><body><main>
-<h1>RL-X kick and get-up: what I tried and why each step failed</h1>
-<p class="sub">Evan Tobias · ACOD310 RoboCup 3D (Booster T1) · 9 Oct 2026 · <a href="details.html">full details, tables and code</a></p>
+<h1>Teaching a robot to kick and get up</h1>
+<p class="sub">Evan Tobias · RoboCup 3D, Booster T1 robot · <a href="details.html">full details and code</a></p>
 
-<h2>The method (same for kick and get-up)</h2>
-<div class="step">
-<div class="row"><b>Approach</b><div>Reinforcement learning: the robot practises in simulation and gets a score (reward) every step. Nobody programs the motion; it is found by trial and error.</div>
-<b>Algorithm</b><div><b style="color:var(--ink);text-transform:none;letter-spacing:0">PPO</b> (Proximal Policy Optimization): after each batch of attempts, make actions that went better than expected more likely, but cap how much the policy can change per update so training stays stable.</div>
-<b>Network</b><div>A small neural network with a <b style="color:var(--ink);text-transform:none;letter-spacing:0">GRU</b> (short-term memory), so it can track things one snapshot can't show: where it is in the motion, how the ball is moving, its 20 ms command delay.</div>
-<b>Inputs</b><div>91 numbers, 50 times a second: 23 joint angles, 23 joint speeds, its last action, gyro, gravity direction (how tilted it is), a gait clock, and the ball's position and velocity relative to its body.</div>
-<b>Outputs</b><div>23 numbers, one per joint. Target angle = standing pose + 0.5 × output. A PD controller (kp 25, kd 0.6) turns the target into motor torque.</div>
-<b>Critic</b><div>During training only, a second network (the critic) judges how good each moment is. It gets extra inputs the robot won't have in a match (foot contacts, body velocity). This is called a privileged critic.</div>
-<b>Training</b><div>Library: RL-X (JAX). Physics: MJX (MuJoCo running on the GPU). 4,096 robots in parallel on one A100, ~75,000 steps per second. Kick v2: ~1.7 billion steps.</div>
-<b>Curriculum</b><div>Starts easy (standing still, ball at the feet) and gets messier as the robot succeeds: tilts, joints off pose, body moving, command delay.</div>
-<b>Standard?</b><div class="good">Yes. PPO + joint-angle targets with PD control + privileged critic + curriculum + randomisation is the standard recipe for training legged robots (RL-X, Isaac Lab, legged_gym).</div></div></div>
+<h2>The idea in one paragraph</h2>
+<div class="card"><p>Nobody tells the robot how to kick. We put it in a simulated world, let it try millions of times, and give it points when the ball goes fast toward the goal and it doesn't fall. Bit by bit its "brain" (a small neural network) changes to do more of what earned points. That is <b>reinforcement learning</b>. It's how you'd learn a video game with no tutorial: try, see the score, repeat.</p></div>
 
-<h2>Kick</h2>
-
-<div class="step"><div class="when">24 Sep · try 1</div>
-<div class="row"><b>Tried</b><div>Built a kick environment in RL-X: copied its RoboCup walking environment, added a ball and a kick reward (ball speed toward the goal, foot near the ball, stay up). Trained on the HPC CPUs.</div>
-<b>Result</b><div class="bad">~500 steps per second. Useless.</div>
-<b>Why</b><div>JAX/MJX barely uses a CPU (about 1.4 of 64 cores). It is built for GPUs.</div>
-<b>Next</b><div>Moved to an A100 GPU: ~75,000 steps per second, 4,096 robots at once.</div></div></div>
-
-<div class="step"><div class="when">24-25 Sep · kick v1 (GPU)</div>
-<div class="row"><b>Result</b><div class="bad">"Success" climbed, then training crashed (NaN).</div>
-<b>Why</b><div><b style="color:var(--ink);text-transform:none;letter-spacing:0">Reward hacking.</b> It learned to stomp the ball into the floor until the physics exploded. The exploding ball had a huge "speed", so the reward paid for it.</div>
-<b>Fix</b><div>End the episode when the physics blows up, cap the reward, and count success only for a real 1-15 m kick.</div></div></div>
-
-<div class="step"><div class="when">25 Sep · kick v2 (GPU, ~1.7 billion steps)</div>
-<div class="row"><b>Result</b><div class="good">A real kick: weight shift, swing, ball flies. 64/64 kicks, 0 falls, ~28 m (calm starts).</div>
-<b>But</b><div class="bad">From messy starts (tilted, joints off, already moving) it falls 45 of 64.</div></div>
-
-<div class="step"><div class="when">8 Oct · why was it fragile?</div>
-<div class="row"><b>Found</b><div>The curriculum (which makes starts messier as the robot succeeds) was stuck at 0.10.</div>
-<b>Why</b><div>My success rule said 1-15 m. The kick goes ~28 m, so <b style="color:var(--ink);text-transform:none;letter-spacing:0">every good kick counted as a failure</b>, and difficulty never went up.</div>
-<b>Fix (v3)</b><div>Success = ball at least 1 m forward and the robot doesn't fall, no cap. The curriculum then climbed 0 → 0.85 in 20 minutes.</div></div></div>
-
-<div class="step"><div class="when">9 Oct · into the real competition server</div>
-<div class="row"><b>Tried</b><div>Exported the policy, wrote a client that builds the same inputs from the server's messages, and ran 12 fixed kick setups in the unmodified server.</div>
-<b>Result</b><div class="bad">Falls 12 out of 12. Ball only ~3.5 m.</div>
-<b>Why</b><div>The training simulator <b style="color:var(--ink);text-transform:none;letter-spacing:0">resets every joint's speed to its motor limit after each step</b>. The real server doesn't. The kick learned to swing harder than real physics allows, and in the server the swing throws the robot over.</div>
-<b>Proof</b><div>Added only that reset to the server: falls went from 12 to 1. Second biggest difference: the ball (weight, bounce, rolling).</div></div>
-<video src="media/server_kick_v2_falls.mp4" controls muted preload="metadata"></video></div>
-
-<div class="step"><div class="when">9 Oct night · kick v4 (laptop CPU, 25 min)</div>
-<div class="row"><b>Tried</b><div>Retrained from v2 without the speed reset and with the server's ball.</div>
-<b>Result</b><div><span class="good">Server, no delay: 0/12 falls, ~20 m.</span> <span class="bad">With the 20 ms delay a real match has: 12/12 falls.</span></div>
-<b>Why</b><div>It had never practised with delay. In RL-X the delay only grows with the curriculum, and v4's curriculum was still low.</div></div></div>
-
-<div class="step"><div class="when">9 Oct night · kick v5 (laptop CPU, ~2.5 h)</div>
-<div class="row"><b>Tried</b><div>Same as v4, with the 20 ms delay always on.</div>
-<b>Result</b><div class="good">Server with match timing: 11/12 kicks, 1/12 falls, ~20 m, 3° off target.</div>
-<b>Lesson</b><div>Training longer is not always better: v4 got worse with more training, so I tested every saved checkpoint in the server.</div></div>
-<video src="media/server_kick_v5_match_delay.mp4" controls muted preload="metadata"></video></div>
-
-<div class="step"><div class="when">still failing · the camera</div>
-<div class="row"><b>Result</b><div class="bad">Using the robot's camera instead of the exact ball position: it kicks, then falls (10/12).</div>
-<b>Why</b><div>The server's camera has a 60° field of view and noise. The ball leaves the view right after contact, so the policy sees an old ball position. It was trained with a perfect ball position 50 times a second.</div>
-<b>Next</b><div>Train with a camera-like ball (noise, gaps, loses the ball after contact): the teacher-student method from UT Austin's T1 striker paper.</div></div>
-<video src="media/server_kick_v5_camera_delay.mp4" controls muted preload="metadata"></video></div>
-
-<h2>Get-up</h2>
-
-<div class="step"><div class="when">24 Sep · building it</div>
-<div class="row"><b>Tried</b><div>Get-up environment: start tilted or lying (up to 90°, growing with the curriculum), 10 s to stand. Reward: torso height, being upright, a bonus once standing, then holding still.</div>
-<b>Bug</b><div class="bad">The fallen robot sank through the floor.</div>
-<b>Why</b><div>The walking environment removes every collision shape except the feet (to run faster). A walking robot only touches the floor with its feet; a fallen one doesn't.</div>
-<b>Fix</b><div>Kept the body's collision shapes in the get-up environment.</div></div></div>
-
-<div class="step"><div class="when">25 Sep · get-up v1 (GPU)</div>
-<div class="row"><b>Result</b><div class="bad">Learned to recover from small tilts only. The curriculum stuck at ~0.17 (about 15° starts).</div>
-<b>Why</b><div>Moving up needs a streak of successes, and success was only ~55%, so the streaks never came.</div></div></div>
-
-<div class="step"><div class="when">9 Oct · tested over the full 10 s</div>
-<div class="row"><b>Result</b><div><span class="good">Near-upright starts: 64/64 standing.</span> <span class="bad">From lying: 0/64. It gets to sitting or kneeling and stops.</span></div>
-<b>Why</b><div>Kneeling already earns most of the height and upright reward. Getting from kneeling to standing needs a big, forceful push, and the penalties on force and joint speed discourage exactly that. So it settles for "good enough" (a local optimum). Some lying starts also crashed the physics; I added a guard.</div>
-<b>Now</b><div>Two GPU runs since 9:12 today. A: always start lying, so it practises the hard case. B: same, with the force/speed penalties cut 10×, the first stage of the HumanUP paper (first find any way up, then make it smooth).</div></div></div>
-
-<h2>What I'd say I learned</h2>
-<div class="say">
-<p>1. A policy that is perfect in training can fail completely in the real server because of a hidden simulator shortcut. Test in the real server early.</p>
-<p>2. Change one difference at a time to find the real cause.</p>
-<p>3. Check your success rule and curriculum: mine silently stopped training from getting harder.</p>
-<p>4. Reward hacking is real: the robot found a physics bug before it found a kick.</p>
+<h2>The words, simply</h2>
+<div class="card">
+<div class="word"><b>Policy</b><div>The robot's brain. It looks at what the robot senses right now and decides how to move every joint. 50 times a second.</div></div>
+<div class="word"><b>What it senses</b><div>91 numbers: how bent each of its 23 joints is, how fast each is moving, which way it's tilting, and where the ball is compared to its body.</div></div>
+<div class="word"><b>What it outputs</b><div>23 numbers, one per joint: "move this joint to this angle". A simple controller (like a spring) then pulls each joint toward that angle. That spring is the <b>PD controller</b>.</div></div>
+<div class="word"><b>Reward</b><div>The points. Kick: points for ball speed toward the goal, for staying upright, for not falling. Minus points for jerky moves.</div></div>
+<div class="word"><b>PPO</b><div>The learning rule. After a batch of tries: "that move went better than expected, do it more; that one went worse, do it less." But only a small change each time, so it doesn't forget what it already learned.</div></div>
+<div class="word"><b>GRU</b><div>Short-term memory inside the brain. One snapshot doesn't tell you if the ball is moving or where you are in the swing. Memory of the last moments does.</div></div>
+<div class="word"><b>Critic</b><div>A coach that only exists during practice. It guesses how good each moment is, so the learning rule knows what "better than expected" means. It's allowed extra information the robot won't have in a match.</div></div>
+<div class="word"><b>Curriculum</b><div>Easy first, harder later. Like school: addition before algebra. The robot first practises standing still with the ball at its feet. As it succeeds, the start gets messier: tilted, joints bent, already moving.</div></div>
+<div class="word"><b>Simulator vs server</b><div>The simulator is the practice pitch where it trains (RL-X, thousands of robots at once on a GPU). The server is the official match stadium. Both are physics engines, but set up a bit differently.</div></div>
+<div class="word"><b>Reward hacking</b><div>The robot finds a cheat that scores points without doing the real task.</div></div>
+<div class="word"><b>Local optimum</b><div>"Good enough" trap: the robot finds something that scores okay and stops looking for the better thing.</div></div>
+<div class="word"><b>Is this standard?</b><div class="good">Yes. This exact recipe (PPO, a memory network, joint-angle targets, a coach, easy-to-hard practice) is how most walking robots are trained today.</div></div>
 </div>
 
-<h2>Questions for the meeting</h2>
-<div class="say"><p>Brazil Open: Marco Simões says remote foreign teams can still register (US$ 230 for 4, a team description paper must be accepted first). Do we go, and who registers?</p>
-<p>What is the title of the motion-capture paper you showed?</p></div>
+<h2>Kick: what I tried, and why each one failed</h2>
+
+<div class="card"><h3>Step 1 · Training on normal computers</h3>
+<p><span class="bad">Way too slow</span>: about 500 practice steps per second.</p>
+<div class="why">Why: the tools are built for graphics cards (GPUs), not normal processors.</div>
+<p>So: moved to a big GPU. 4,096 robots practising at once, 75,000 steps per second.</p></div>
+
+<div class="card"><h3>Step 2 · Kick v1: the robot cheated</h3>
+<p><span class="bad">The score went up, but it wasn't kicking.</span></p>
+<div class="why">Why: it learned to stomp the ball into the floor until the physics glitched and the ball "flew" at crazy speed. Points for ball speed, so the cheat paid. That's reward hacking.</div>
+<p>So: stop the try when physics glitches, and cap the points.</p></div>
+
+<div class="card"><h3>Step 3 · Kick v2: a real kick</h3>
+<p><span class="good">Leans, swings, ball flies about 28 m. 64 out of 64 tries.</span></p>
+<p><span class="bad">But if it starts a little tilted or moving, it falls 45 out of 64 times.</span></p>
+<div class="why">Why: it never practised messy starts. The easy-to-hard practice (curriculum) never got harder, because my "success" rule said the ball must go 1 to 15 m. The kick went 28 m, so every good kick counted as a failure. Oops.</div>
+<p>So: success now = ball goes at least 1 m and the robot doesn't fall. Then the practice started getting harder like it should.</p></div>
+
+<div class="card"><h3>Step 4 · Kick v2 in the real match server</h3>
+<p><span class="bad">Falls 12 out of 12 times.</span> Perfect in practice, useless in the stadium.</p>
+<div class="why">Why: the practice simulator secretly slows every joint down to its speed limit after each step. Like a safety rope on your arm. The real server has no rope. So the robot learned to swing as hard as possible, and in the real server the swing throws it over.</div>
+<p>How I know: I added only that "rope" to the server and falls went from 12 to 1. The ball was also a bit different (weight, bounce).</p>
+<video src="media/server_kick_v2_falls.mp4" controls muted preload="metadata"></video></div>
+
+<div class="card"><h3>Step 5 · Kick v4: practise without the rope</h3>
+<p><span class="good">In the server: 0 falls out of 12.</span> <span class="bad">But with the real match delay, 12 falls again.</span></p>
+<div class="why">Why: in a real match your command arrives 20 milliseconds late. It had never practised with that delay.</div></div>
+
+<div class="card"><h3>Step 6 · Kick v5: practise with the delay too</h3>
+<p><span class="good">In the server with the match delay: 11 out of 12 kicks, 1 fall, about 20 m, almost straight at the target.</span></p>
+<p>Lesson: longer practice isn't always better. v4 got worse when it trained longer, so I tested every saved version in the server.</p>
+<video src="media/server_kick_v5_match_delay.mp4" controls muted preload="metadata"></video></div>
+
+<div class="card"><h3>Still broken · Using the robot's own camera</h3>
+<p><span class="bad">It kicks, then falls (10 out of 12).</span></p>
+<div class="why">Why: in practice it always knew exactly where the ball was. The real camera is narrow and noisy, and the ball disappears from view right after the kick. The robot gets confused and loses balance.</div>
+<p>Next: practise with a fake camera that's just as bad, so it learns to cope.</p>
+<video src="media/server_kick_v5_camera_delay.mp4" controls muted preload="metadata"></video></div>
+
+<h2>Get-up: what I tried, and why it fails</h2>
+
+<div class="card"><h3>Step 1 · The robot fell through the floor</h3>
+<div class="why">Why: to run faster, the walking setup only lets the feet touch the floor. A fallen robot touches the floor with its back and arms, so it sank.</div>
+<p>So: gave the whole body back its collision shape for get-up.</p></div>
+
+<div class="card"><h3>Step 2 · Only learned small wobbles</h3>
+<p><span class="bad">Recovers from a small tilt, never from lying down.</span></p>
+<div class="why">Why: the practice only gets harder after a streak of successes, and it only succeeded about half the time, so it stayed stuck on easy.</div></div>
+
+<div class="card"><h3>Step 3 · Stuck at kneeling</h3>
+<p><span class="good">Almost upright: stands 64 out of 64.</span> <span class="bad">Lying down: 0 out of 64. It gets to kneeling and stops.</span></p>
+<div class="why">Why: kneeling already earns most of the points (head fairly high, body fairly upright). Getting from kneeling to standing needs a big, forceful push, and I give minus points for forceful moves. So it settles for kneeling. That's a local optimum.</div>
+<p>Now: two runs on the GPU. A: always start lying down, so it practises the hard part every time. B: same, but with much smaller minus points for force, so it's allowed to push hard first and get smooth later (the idea from the HumanUP paper).</p></div>
+
+<h2>What I learned</h2>
+<div class="card">
+<p>1. Perfect in practice can mean useless in the real game. Test in the real server early.</p>
+<p>2. To find the real cause, change one thing at a time.</p>
+<p>3. Check your success rule. Mine quietly stopped the practice from getting harder.</p>
+<p>4. Robots cheat if the points let them.</p>
+</div>
+
+<h2>Questions</h2>
+<div class="card">
+<p>Brazil Open: Marco Simões says remote teams can still register (230 US dollars for 4 people, a team description paper must be accepted first). Do we go, and who registers?</p>
+<p>What is the title of the motion-capture paper you showed?</p>
+</div>
 </main></body></html>
