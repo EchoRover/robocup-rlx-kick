@@ -35,7 +35,7 @@ code{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:var(--co
 <div class="kpi"><b>20 m · 3°</b><span>v5 median distance, off target</span></div>
 <div class="kpi"><b class="bad">10/12</b><span>falls when using the camera (open)</span></div>
 </div></header>
-<nav><div><a href="#trained">1 What I trained</a><a href="#train">2 Training results</a><a href="#server">3 In the server</a><a href="#why">4 Why it broke</a><a href="#fix">5 Fix</a><a href="#getup">6 Get-up</a><a href="#karthik">7 Team</a><a href="#next">8 Next</a><a href="#files">Files</a></div></nav>
+<nav><div><a href="#trained">1 What I trained</a><a href="#train">2 Training results</a><a href="#server">3 In the server</a><a href="#why">4 Why it broke</a><a href="#fix">5 Fix</a><a href="#getup">6 Get-up</a><a href="#next">7 Next</a><a href="#files">Files</a></div></nav>
 <main>
 
 <section id="trained"><div class="k">1 · What I trained</div><h2>A kick policy: PPO with a GRU memory, in RL-X</h2>
@@ -296,18 +296,14 @@ code{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:var(--co
 <section id="getup"><div class="k">6 · Get-up</div><h2>Stuck at kneeling</h2>
 <table><tr><th>RL-X get-up, 64 episodes of 10 s</th><th>Standing at the end</th></tr>
 <tr><td>From near-upright starts</td><td class="good">64/64</td></tr><tr><td>From lying</td><td class="bad">0/64</td></tr></table>
-<p>It reaches sitting/kneeling and stops: sitting already earns height reward, and standing up needs a forceful, risky motion. Karthik's stack has its own get-up (see his page). Plan if I continue mine: always start fallen, two-stage reward (HumanUP, arXiv 2502.12152), no velocity clip. A GPU run of that is training now.</p>
+<p>It reaches sitting/kneeling and stops: sitting already earns height reward, and standing up needs a forceful, risky motion. Plan if I continue mine: always start fallen, two-stage reward (HumanUP, arXiv 2502.12152), no velocity clip. A GPU run of that is training now.</p>
 </section>
 
-<section id="karthik"><div class="k">7 · Relation to Karthik's stack</div><h2>His stack is further along; he presents it himself</h2>
-<p>Karthik has his own skills, orchestrator and match results (<a href="https://velluu.github.io/robocup-t1/">velluu.github.io/robocup-t1</a>). I am not reporting his numbers here. What this work adds for the team: a measured explanation of why RL-X-trained policies break in the server, and a test tool that runs any skill in the unmodified server on fixed setups, so different kicks can be compared on equal terms.</p>
-</section>
-
-<section id="next"><div class="k">8 · Next</div><h2>Make the kick something Karthik's orchestrator can use, or drop it with data</h2>
+<section id="next"><div class="k">7 · Next</div><h2>Make the kick usable in a full team, or drop it with data</h2>
 <ol><li>Train with a camera-like ball (noise, 25 Hz, ball lost after contact).</li>
-<li>Start episodes from Karthik's walk stopping poses, not a perfect standing pose.</li>
+<li>Start episodes from the walk policy's stopping poses, not a perfect standing pose.</li>
 <li>Train on the GPU (kick v5 job running now on an A100).</li>
-<li>Compare both kicks on the test tool (same 12 setups: speed, accuracy, falls, time to kick) and keep whichever wins in each situation.</li>
+<li>Compare kicks on the test tool (same 12 setups: speed, accuracy, falls, time to kick) and keep whichever wins in each situation.</li>
 <li>Use the test tool on team problems: falls per match, measuring the tactics layer over many matches.</li></ol>
 <div class="callout"><b>Brazil Open: we can still enter.</b> Marco Simões (league) replied on 8 Oct: registration is still open for remote foreign teams through the Olimpo system (olimpo.robocup.org.br); problems go to the 3D simulation chair (adailton.junior@gmail.com, cc cbr@robocup.org.br). CBR 2026 runs 23-29 Nov and lists <b>RoboCup Simulation 3D</b> as a category (chair Adailton Junior; 2026 rules: 7 vs 7, 2 × 5 min, T1/K1, rcssservermj on Ubuntu 24.04, binaries delivered with start/kill scripts). Remote non-Brazilian team of 4: <b>US$ 230</b> (US$ 190 with RoboCup Brasil membership), PayPal. Payment is only accepted after the team's <b>TDP is accepted</b>, so we likely need a TDP: confirm with the chair. Decision for the team: register, who writes the TDP?</div>
 <p><b>Questions:</b> Do we register for the Brazil Open, and who does it? Title of the mocap → imitation → style paper? What does the orchestrator need from a kick?</p>
