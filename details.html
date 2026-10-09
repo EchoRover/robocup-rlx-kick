@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RL-X Kick in the Server</title>
+<style>
+:root{--bg:#f7f6f2;--panel:#fff;--ink:#1c1c1e;--muted:#6b6b70;--line:#dedcd5;--accent:#2f6fde;--good:#1f8a4c;--bad:#c23b2e;--soft:#eef2fb;--code:#f4f4f1}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#141416;--panel:#1c1c20;--ink:#ececee;--muted:#9a9aa2;--line:#33333a;--accent:#6c9cff;--good:#4cc47e;--bad:#ff6b5e;--soft:#22283a;--code:#17171a}}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+header{padding:36px 16px 10px;max-width:1040px;margin:0 auto} h1{font-size:32px;margin:0} .by{color:var(--muted);margin:4px 0 14px}
+nav{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)} nav div{max-width:1040px;margin:0 auto;padding:8px 16px;display:flex;gap:6px;flex-wrap:wrap}
+nav a{font-size:13px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--ink);text-decoration:none} nav a:hover{border-color:var(--accent)}
+main{max-width:1040px;margin:0 auto;padding:10px 16px 80px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;margin:18px 0}
+h2{margin:0 0 8px;font-size:22px} h3{margin:18px 0 6px;font-size:16px} .k{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:14px 0}
+.kpi{background:var(--soft);border-radius:10px;padding:12px} .kpi b{display:block;font-size:24px} .kpi span{font-size:13px;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:14px;margin:8px 0} th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)} .good{color:var(--good);font-weight:700} .bad{color:var(--bad);font-weight:700}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+figure{margin:8px 0} video,img{width:100%;border-radius:10px;border:1px solid var(--line);background:#000;display:block} figcaption{font-size:13px;color:var(--muted);margin-top:4px}
+details.code{border:1px solid var(--line);border-radius:10px;margin:8px 0;background:var(--code)} details.code summary{cursor:pointer;padding:8px 12px;font-size:14px}
+.path{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);margin-left:6px}
+pre{margin:0;padding:10px 12px;overflow-x:auto;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;border-top:1px solid var(--line)} .ln{color:var(--muted);user-select:none}
+a.open{display:inline-block;margin:0 12px 10px;font-size:13px;color:var(--accent)}
+.pipe{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin:10px 0} .stage{flex:1;min-width:150px;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px} .stage b{display:block;margin-bottom:4px} .arr{align-self:center;color:var(--muted);font-size:20px}
+.note{font-size:14px;color:var(--muted)} .callout{border-left:4px solid var(--accent);background:var(--soft);padding:10px 14px;border-radius:0 8px 8px 0;margin:10px 0}
+code{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:var(--code);padding:1px 5px;border-radius:5px}
+</style></head><body>
+<header><div class="k">ACOD310 · RoboCup 3D (Booster T1) · 9 Oct 2026</div>
+<h1>RL-X kick: from the training sim to the real server</h1>
+<div class="by">Evan Tobias. What I trained, why it broke in rcssservermj, the fix, and what is still broken.</div>
+<div class="kpis">
+<div class="kpi"><b class="bad">12/12</b><span>falls in the server, kick v2</span></div>
+<div class="kpi"><b>1 cause</b><span>joint velocity clip in the training env</span></div>
+<div class="kpi"><b class="good">1/12</b><span>falls in the server, kick v5, match timing</span></div>
+<div class="kpi"><b>20 m · 3°</b><span>v5 median distance, off target</span></div>
+<div class="kpi"><b class="bad">10/12</b><span>falls when using the camera (open)</span></div>
+</div></header>
+<nav><div><a href="#trained">1 What I trained</a><a href="#train">2 Training results</a><a href="#server">3 In the server</a><a href="#why">4 Why it broke</a><a href="#fix">5 Fix</a><a href="#getup">6 Get-up</a><a href="#next">7 Next</a><a href="#files">Files</a></div></nav>
+<main>
+
+<section id="trained"><div class="k">1 · What I trained</div><h2>A kick policy: PPO with a GRU memory, in RL-X</h2>
+<p>RL-X (Nico Bohlinger's JAX library) is what the shipped walk policy was trained with. I started from its RoboCup locomotion environment and made a kick environment: same robot, same action interface, plus a ball, a kick reward and a success rule.</p>
+<div class="pipe">
+<div class="stage"><b>Observation (91 values, 50 Hz)</b>23 joint angles · 23 joint speeds · last action · gyro · gravity direction (tilt) · gait clock · ball position + velocity relative to the body</div><div class="arr">→</div>
+<div class="stage"><b>Policy network</b>GRU memory + MLP. Starts random; PPO improves it.</div><div class="arr">→</div>
+<div class="stage"><b>Action (23 values)</b>target angle = standing pose + 0.5 × action</div><div class="arr">→</div>
+<div class="stage"><b>PD controller</b>torque = 25·(target − angle) − 0.6·speed.</div>
+</div>
+<details class="code"><summary><b>Action to target angle (PD control)</b> <span class="path">training/RL-X/rl_x/environments/custom_mujoco/robocup_soccer/kick/mjx/control_functions/pd.py:10</span></summary><pre><span class="ln">  10</span>      def process_action(self, action, internal_state):
+<span class="ln">  11</span>          scaled_action = action * internal_state[&quot;scaling_factor&quot;]
+<span class="ln">  12</span>          target_joint_positions = internal_state[&quot;actuator_joint_nominal_positions&quot;] + scaled_action
+<span class="ln">  13</span>          noisy_target_joint_positions = target_joint_positions + internal_state[&quot;position_offsets&quot;]
+<span class="ln">  14</span>          
+<span class="ln">  15</span>          return noisy_target_joint_positions</pre></details><details class="code"><summary><b>What the policy sees vs what the critic sees</b> <span class="path">training/RL-X/rl_x/environments/custom_mujoco/robocup_soccer/kick/mjx/environment.py:591</span></summary><pre><span class="ln"> 591</span>          self.policy_observation_indices = jnp.concatenate([
+<span class="ln"> 592</span>              self.joint_positions_obs_idx,
+<span class="ln"> 593</span>              self.joint_velocities_obs_idx,
+<span class="ln"> 594</span>              self.joint_previous_actions_obs_idx,
+<span class="ln"> 595</span>              self.imu_angular_vel_obs_idx,
+<span class="ln"> 596</span>              self.goal_velocities_obs_idx,
+<span class="ln"> 597</span>              self.gait_phase_obs_idx,
+<span class="ln"> 598</span>              self.gravity_vector_obs_idx,
+<span class="ln"> 599</span>              self.policy_exteroception_obs_idx,
+<span class="ln"> 600</span>              self.ball_obs_idx,
+<span class="ln"> 601</span>          ], dtype=int)
+<span class="ln"> 602</span>  
+<span class="ln"> 603</span>          self.critic_observation_indices = jnp.concatenate([
+<span class="ln"> 604</span>              self.joint_positions_obs_idx,
+<span class="ln"> 605</span>              self.joint_velocities_obs_idx,
+<span class="ln"> 606</span>              self.joint_previous_actions_obs_idx,
+<span class="ln"> 607</span>              self.feet_ground_contact_obs_idx,
+<span class="ln"> 608</span>              self.feet_time_on_ground_obs_idx,
+<span class="ln"> 609</span>              self.feet_time_in_air_obs_idx,
+<span class="ln"> 610</span>              self.imu_linear_vel_obs_idx,
+<span class="ln"> 611</span>              self.imu_angular_vel_obs_idx,
+<span class="ln"> 612</span>              self.goal_velocities_obs_idx,
+<span class="ln"> 613</span>              self.gait_phase_obs_idx,
+<span class="ln"> 614</span>              self.gravity_vector_obs_idx,
+<span class="ln"> 615</span>              self.critic_exteroception_obs_idx,
+<span class="ln"> 616</span>              self.ball_obs_idx,
+<span class="ln"> 617</span>          ], dtype=int)</pre></details>
+<p>The <b>critic</b> (which only exists during training, to judge how good a state is) sees extra information the policy does not: foot contacts, body velocity, height over ground. This is usually called a privileged or asymmetric critic.</p>
+<h3>Reward: what counts as good</h3>
+<table><tr><th>Term</th><th>Per second</th><th>Why</th></tr>
+<tr><td>Ball speed toward the target</td><td>3 × speed (capped at 6 m/s)</td><td>the actual goal: kick it hard, in the right direction</td></tr>
+<tr><td>Closest foot near the ball (until the ball moves)</td><td>1 × exp(−distance / 0.2 m)</td><td>helps it find the ball early in training</td></tr>
+<tr><td>Alive</td><td>0.5</td><td>falling ends the episode, so staying up pays</td></tr>
+<tr><td>Upright</td><td>0.5 × uprightness</td><td>stay balanced</td></tr>
+<tr><td>Penalties</td><td>action change, joint speed, torque, joint limits</td><td>smooth, motor-friendly motion</td></tr></table>
+<details class="code"><summary><b>Kick reward, every step</b> <span class="path">training/RL-X/rl_x/environments/custom_mujoco/robocup_soccer/kick/mjx/reward_functions/kick.py:62</span></summary><pre><span class="ln">  62</span>      def reward_and_info(self, data, mjx_model, internal_state, action, info):
+<span class="ln">  63</span>          ball_pos = data.qpos[self.env.ball_qpos_adr:self.env.ball_qpos_adr + 3]
+<span class="ln">  64</span>          ball_vel = data.qvel[self.env.ball_qvel_adr:self.env.ball_qvel_adr + 3]
+<span class="ln">  65</span>  
+<span class="ln">  66</span>          # Ball speed towards the target (only forward motion counts), clipped so one lucky bounce can&#x27;t dominate
+<span class="ln">  67</span>          ball_speed_to_target = jnp.dot(ball_vel[:2], self.env.kick_target_direction[:2])
+<span class="ln">  68</span>          ball_velocity_reward = self.ball_velocity_coeff * jnp.clip(ball_speed_to_target, 0.0, self.ball_velocity_clip)
+<span class="ln">  69</span>  
+<span class="ln">  70</span>          # Approach: closest foot near the ball, only while the ball hasn&#x27;t been kicked yet
+<span class="ln">  71</span>          feet_pos = data.geom_xpos[self.env.foot_geom_indices]
+<span class="ln">  72</span>          closest_foot_distance = jnp.min(jnp.linalg.norm(feet_pos[:, :2] - ball_pos[None, :2], axis=-1))
+<span class="ln">  73</span>          ball_still = jnp.linalg.norm(ball_vel[:2]) &lt; self.ball_moving_threshold
+<span class="ln">  74</span>          foot_to_ball_reward = ball_still * self.foot_to_ball_coeff * jnp.exp(-closest_foot_distance / self.foot_to_ball_scale)
+<span class="ln">  75</span>  
+<span class="ln">  76</span>          # Stay up
+<span class="ln">  77</span>          imu_xmat = data.site_xmat[self.env.imu_site_id].reshape(3, 3)
+<span class="ln">  78</span>          uprightness = imu_xmat[2, 2]
+<span class="ln">  79</span>          alive_reward = self.alive_coeff * 1.0
+<span class="ln">  80</span>          upright_reward = self.upright_coeff * jnp.clip(uprightness, 0.0, 1.0)
+<span class="ln">  81</span>  
+<span class="ln">  82</span>          # Regularisers
+<span class="ln">  83</span>          joint_pos = data.qpos[self.env.actuator_joint_mask_qpos]
+<span class="ln">  84</span>          joint_vel = data.qvel[self.env.actuator_joint_mask_qvel]
+<span class="ln">  85</span>          action_rate_reward = self.action_rate_coeff * -jnp.mean(jnp.square(action - internal_state[&quot;last_action&quot;]))
+<span class="ln">  86</span>          joint_velocity_reward = self.joint_velocity_coeff * -jnp.mean(jnp.square(joint_vel))
+<span class="ln">  87</span>          force_capacity = jnp.abs(mjx_model.actuator_forcerange).max(axis=1)
+<span class="ln">  88</span>          force_capacity = jnp.where(force_capacity &gt; 0.0, force_capacity, 1.0)
+<span class="ln">  89</span>          torque_reward = self.joint_torque_coeff * -jnp.mean(jnp.square(data.qfrc_actuator[self.env.actuator_joint_mask_qvel] / force_capacity))
+<span class="ln">  90</span>          limits = internal_state[&quot;joint_position_limits&quot;][self.env.actuator_joint_mask_joints - 1]
+<span class="ln">  91</span>          out_of_limits = -jnp.minimum(joint_pos - limits[:, 0], 0.0) + jnp.maximum(joint_pos - limits[:, 1], 0.0)</pre></details><details class="code"><summary><b>Reward coefficients</b> <span class="path">training/RL-X/rl_x/environments/custom_mujoco/robocup_soccer/kick/mjx/default_config.py:132</span></summary><pre><span class="ln"> 132</span>              &quot;type&quot;: &quot;kick&quot;,
+<span class="ln"> 133</span>              # --- kick reward (reward_functions/kick.py) ---
+<span class="ln"> 134</span>              &quot;ball_velocity_coeff&quot;: 3.0,
+<span class="ln"> 135</span>              &quot;ball_velocity_clip&quot;: 6.0,
+<span class="ln"> 136</span>              &quot;foot_to_ball_coeff&quot;: 1.0,
+<span class="ln"> 137</span>              &quot;foot_to_ball_scale&quot;: 0.2,
+<span class="ln"> 138</span>              &quot;ball_moving_threshold&quot;: 0.3,
+<span class="ln"> 139</span>              &quot;kick_alive_coeff&quot;: 0.5,
+<span class="ln"> 140</span>              &quot;kick_upright_coeff&quot;: 0.5,</pre></details>
+<h3>How it practises</h3>
+<p>4-second episodes. The robot starts standing, the ball at rest 0.2-0.45 m ahead and up to 0.2 m to the side. 4,096 robots in parallel on one A100 (~75,000 steps/s); v2 trained for ~1.7 billion steps. A curriculum makes the start messier (tilts, joint offsets, body velocity, action delay) as the robot succeeds.</p>
+<details class="code"><summary><b>Episode start: ball placement</b> <span class="path">training/RL-X/rl_x/environments/custom_mujoco/robocup_soccer/kick/mjx/domain_randomization/initial_state_functions/random.py:66</span></summary><pre><span class="ln">  66</span>          # kick: ball in front of the robot (robot faces +x), at rest
+<span class="ln">  67</span>          ball_keys = jax.random.split(keys[0], 2)
+<span class="ln">  68</span>          ball_x = jax.random.uniform(ball_keys[0], minval=0.2, maxval=0.45)
+<span class="ln">  69</span>          ball_y = jax.random.uniform(ball_keys[1], minval=-0.2, maxval=0.2)
+<span class="ln">  70</span>          a = self.env.ball_qpos_adr
+<span class="ln">  71</span>          qpos = qpos.at[a:a + 7].set(jnp.array([ball_x, ball_y, self.env.ball_radius, 1.0, 0.0, 0.0, 0.0]))
+<span class="ln">  72</span>          qvel = qvel.at[self.env.ball_qvel_adr:self.env.ball_qvel_adr + 6].set(0.0)</pre></details>
+<h3>PPO in one paragraph</h3>
+<p>Collect a batch of attempts from all robots. For every action, work out whether it turned out better or worse than the critic expected (the <i>advantage</i>, computed with GAE). Nudge the policy toward the better-than-expected actions, but clip the step so the new policy cannot move too far from the old one in one update. Repeat.</p>
+<details class="code"><summary><b>Advantages (GAE)</b> <span class="path">training/RL-X/rl_x/algorithms/ppo_gru/flax_full_jit/ppo_gru.py:169</span></summary><pre><span class="ln"> 169</span>                      def calculate_gae_advantages(critic_state, next_states, rewards, values, terminations):
+<span class="ln"> 170</span>                          def compute_advantages(carry, t):
+<span class="ln"> 171</span>                              prev_advantage = carry[0]
+<span class="ln"> 172</span>                              advantage = delta[t] + self.gamma * self.gae_lambda * (1 - terminations[t]) * prev_advantage
+<span class="ln"> 173</span>                              return (advantage,), advantage
+<span class="ln"> 174</span>  
+<span class="ln"> 175</span>                          next_values = self.critic.apply(critic_state.params, next_states).squeeze(-1)
+<span class="ln"> 176</span>                          delta = rewards + self.gamma * next_values * (1.0 - terminations) - values
+<span class="ln"> 177</span>                          init_advantages = delta[-1]
+<span class="ln"> 178</span>                          _, advantages = jax.lax.scan(compute_advantages, (init_advantages,), jnp.arange(self.nr_steps - 2, -1, -1))
+<span class="ln"> 179</span>                          advantages = jnp.concatenate([advantages[::-1], jnp.array([init_advantages])])
+<span class="ln"> 180</span>                          returns = advantages + values</pre></details><details class="code"><summary><b>PPO clipped loss</b> <span class="path">training/RL-X/rl_x/algorithms/ppo_gru/flax_full_jit/ppo_gru.py:187</span></summary><pre><span class="ln"> 187</span>                      def loss_fn(policy_params, critic_params, state_seq, action_seq, log_prob_seq, return_seq, advantage_seq, done_seq, init_carry):
+<span class="ln"> 188</span>                          # Policy loss
+<span class="ln"> 189</span>                          action_mean, action_logstd = self.policy.apply(policy_params, state_seq, done_seq, init_carry, method=self.policy.forward_sequence)
+<span class="ln"> 190</span>                          action_std = jnp.exp(action_logstd)
+<span class="ln"> 191</span>                          new_log_prob = -0.5 * ((action_seq - action_mean) / action_std) ** 2 - 0.5 * jnp.log(2.0 * jnp.pi) - action_logstd
+<span class="ln"> 192</span>                          new_log_prob = new_log_prob.sum(-1)
+<span class="ln"> 193</span>                          entropy = action_logstd + 0.5 * jnp.log(2.0 * jnp.pi * jnp.e)
+<span class="ln"> 194</span>                          
+<span class="ln"> 195</span>                          logratio = new_log_prob - log_prob_seq
+<span class="ln"> 196</span>                          ratio = jnp.exp(logratio)
+<span class="ln"> 197</span>                          approx_kl_div = (ratio - 1) - logratio
+<span class="ln"> 198</span>                          clip_fraction = jnp.float32((jnp.abs(ratio - 1) &gt; self.clip_range))
+<span class="ln"> 199</span>  
+<span class="ln"> 200</span>                          pg_loss1 = -advantage_seq * ratio
+<span class="ln"> 201</span>                          pg_loss2 = -advantage_seq * jnp.clip(ratio, 1 - self.clip_range, 1 + self.clip_range)
+<span class="ln"> 202</span>                          pg_loss = jnp.maximum(pg_loss1, pg_loss2)
+<span class="ln"> 203</span>                          
+<span class="ln"> 204</span>                          entropy_loss = entropy.sum(-1)
+<span class="ln"> 205</span>                          
+<span class="ln"> 206</span>                          # Critic loss
+<span class="ln"> 207</span>                          new_value = self.critic.apply(critic_params, state_seq).squeeze(-1)
+<span class="ln"> 208</span>                          critic_loss = 0.5 * (new_value - return_seq) ** 2</pre></details>
+<div class="callout"><b>Is this standard?</b> Yes. PPO + joint-position targets with PD control + a privileged critic + curriculum + domain randomisation is the standard recipe for legged robots (RL-X, Isaac Lab, legged_gym).</div>
+</section>
+
+<section id="train"><div class="k">2 · Results in training</div><h2>Near perfect from calm starts, fragile from messy ones</h2>
+<table><tr><th>RL-X training sim, 64 episodes</th><th>Kicked</th><th>Fell</th><th>Distance (median)</th><th>Peak ball speed</th><th>Off target</th></tr>
+<tr><td>Calm starts (what it trained on)</td><td>64/64</td><td class="good">0/64</td><td>28 m</td><td>15 m/s</td><td>1.6°</td></tr>
+<tr><td>Messy starts (full randomisation)</td><td>61/64</td><td class="bad">45/64</td><td>13 m</td><td>8 m/s</td><td>10.6°</td></tr></table>
+<div class="grid2"><figure><img src="media/kick_sequence_first_0.3s.png"><figcaption>The learned kick (first 0.3 s): wind-up, swing, contact, follow-through.</figcaption></figure>
+<figure><img src="media/kick_gpu_v2_curves.png"><figcaption>v2 training curves (GPU, 25 Sep).</figcaption></figure></div>
+<h3>Bug I found: the curriculum never moved</h3>
+<p>The old success rule only counted a kick if the ball travelled 1 to 15 m. A good kick goes ~28 m, so almost every good kick counted as a failure and the curriculum stayed at 0.10: it never practised messy starts. New rule: ball ≥ 1 m forward <b>and</b> the robot survives the whole episode, no cap. With it the curriculum climbed from 0 to 0.85 in 20 minutes of training.</p>
+<details class="code"><summary><b>Success rule + curriculum (fixed version)</b> <span class="path">training/RL-X/rl_x/environments/custom_mujoco/robocup_soccer/kick/mjx/environment.py:365</span></summary><pre><span class="ln"> 365</span>          # kick: an episode succeeds if the ball travelled &gt;= 1 m towards the target AND the robot lasted the whole
+<span class="ln"> 366</span>          # episode (falls and physics blow-ups terminate early). v2 also capped travel at 15 m, but a good kick goes
+<span class="ln"> 367</span>          # ~28 m in 4 s, so nearly every real kick counted as a failure and the curriculum never advanced (stuck ~0.1).
+<span class="ln"> 368</span>          ball_travel = jnp.dot(state.data.qpos[self.ball_qpos_adr:self.ball_qpos_adr + 2] - new_state.internal_state[&quot;ball_start_xy&quot;], self.kick_target_direction[:2])
+<span class="ln"> 369</span>          survived = new_state.info_episode_store[&quot;episode_step&quot;] &gt;= self.horizon - 1
+<span class="ln"> 370</span>          episode_success = jnp.isfinite(ball_travel) &amp; (ball_travel &gt;= 1.0) &amp; survived
+<span class="ln"> 371</span>          new_state.internal_state[&quot;ball_start_xy&quot;] = qpos[self.ball_qpos_adr:self.ball_qpos_adr + 2]
+<span class="ln"> 372</span>          new_state.internal_state[&quot;env_curriculum_levels_in_a_row&quot;] = jnp.where(episode_success,
+<span class="ln"> 373</span>              jnp.where(new_state.internal_state[&quot;env_curriculum_levels_in_a_row&quot;] &gt;= 0,
+<span class="ln"> 374</span>                  new_state.internal_state[&quot;env_curriculum_levels_in_a_row&quot;] + 1,
+<span class="ln"> 375</span>                  1
+<span class="ln"> 376</span>              ),
+<span class="ln"> 377</span>              jnp.where(new_state.internal_state[&quot;env_curriculum_levels_in_a_row&quot;] &lt; 0,
+<span class="ln"> 378</span>                  new_state.internal_state[&quot;env_curriculum_levels_in_a_row&quot;] - 1,
+<span class="ln"> 379</span>                  -1
+<span class="ln"> 380</span>              )
+<span class="ln"> 381</span>          )
+<span class="ln"> 382</span>          new_state.internal_state[&quot;env_curriculum_coeff&quot;] =  jnp.clip(new_state.internal_state[&quot;env_curriculum_coeff&quot;] + new_state.internal_state[&quot;env_curriculum_levels_in_a_row&quot;] / self.env_curriculum_nr_levels, 0.0, 1.0)</pre></details>
+</section>
+
+<section id="server"><div class="k">3 · Into the real server</div><h2>Test tool: the unmodified rcssservermj, 12 fixed setups</h2>
+<p>The policy is exported from JAX to PyTorch (checked to match to 4e-6), a client builds exactly the training observation from the server's messages, and the server runs unmodified. Every test uses the same 12 ball placements, and the true ball and robot positions are logged every cycle.</p>
+<details class="code"><summary><b>Server client: building the observation from server messages</b> <span class="path">experiments/kick_server/kick_trials.py:218</span></summary><pre><span class="ln"> 218</span>      def proprio(self, d, goal):
+<span class="ln"> 219</span>          &quot;&quot;&quot;The 82 locomotion values, identical to the training env / nn_client (order + scaling).&quot;&quot;&quot;
+<span class="ln"> 220</span>          jp = (d[&#x27;q&#x27;] - NOMINAL) / 3.14
+<span class="ln"> 221</span>          jv = d[&#x27;dq&#x27;] / 100.0
+<span class="ln"> 222</span>          pa = self.prev / 10.0
+<span class="ln"> 223</span>          av = np.clip(d[&#x27;gyr&#x27;] / 50.0, -1.0, 1.0)
+<span class="ln"> 224</span>          ph = self._wrap(self.phase + self.phase_dt)
+<span class="ln"> 225</span>          gait = np.concatenate([np.sin(ph), np.cos(ph)])
+<span class="ln"> 226</span>          grav = rot_of(d[&#x27;quat&#x27;]).inv().apply([0.0, 0.0, -1.0])
+<span class="ln"> 227</span>          return np.concatenate([jp, jv, pa, av, goal, gait, grav]).astype(np.float32)
+<span class="ln"> 228</span>  
+<span class="ln"> 229</span>      def act(self, obs):
+<span class="ln"> 230</span>          obs = np.clip(np.nan_to_num(obs, nan=0.0, posinf=0.0, neginf=0.0), -10.0, 10.0).astype(np.float32)
+<span class="ln"> 231</span>          with torch.no_grad():
+<span class="ln"> 232</span>              a, self.h = self.net(torch.from_numpy(obs).unsqueeze(0), self.h)
+<span class="ln"> 233</span>          a = a.squeeze(0).numpy().astype(np.float32)
+<span class="ln"> 234</span>          self.prev = a
+<span class="ln"> 235</span>          self.phase = self._wrap(self.phase + self.phase_dt).astype(np.float32)
+<span class="ln"> 236</span>          return a, obs
+<span class="ln"> 237</span>  
+<span class="ln"> 238</span>  
+<span class="ln"> 239</span>  MAXVEL = np.array([12.56, 12.56, 18.84, 18.84, 18.84, 18.84, 18.84, 18.84, 18.84, 18.84, 10.88,</pre></details>
+<div class="grid2"><figure><video src="media/server_kick_v2_falls.mp4" controls muted loop playsinline preload="metadata"></video><figcaption>Kick v2 in the server: pokes the ball, flips backwards. 12/12 falls, ball 3.5 m.</figcaption></figure>
+<figure><img src="media/trajectories.png"><figcaption>Ball and torso over time: training sim vs server vs server with fixes.</figcaption></figure></div>
+</section>
+
+<section id="why"><div class="k">4 · Why it broke</div><h2>Switch on one training-sim difference at a time</h2>
+<table><tr><th>Changed inside the server (diagnosis only)</th><th>Kicked</th><th>Fell</th><th>Distance</th></tr>
+<tr><td>nothing (the real server)</td><td>8/12</td><td class="bad">12/12</td><td>3.5 m</td></tr>
+<tr><td><b>only</b> the joint velocity clip</td><td>12/12</td><td class="good">1/12</td><td>12.7 m</td></tr>
+<tr><td>everything <b>except</b> the velocity clip</td><td>8/12</td><td class="bad">11/12</td><td>1.8 m</td></tr>
+<tr><td>everything except the ball model</td><td>12/12</td><td>6/12</td><td>17.3 m</td></tr>
+<tr><td>everything except foot contact</td><td>12/12</td><td>0/12</td><td>22.4 m</td></tr>
+<tr><td>all six differences</td><td>12/12</td><td class="good">0/12</td><td>25.8 m</td></tr></table>
+<div class="callout"><b>The cause.</b> After every 20 ms control step, the RL-X env clips every joint's speed to the motor limit. Real physics doesn't do that; the server only limits torque. The kick learned to slam its joints into that clip. In the server nothing catches them: joints run 2 to 3.7 times faster than their limits and the robot throws itself over. Second: the ball (server ball is 0.43 kg vs 0.45, more rolling resistance, stiffer contact). Smaller: foot contact, 20 ms action delay, a stale first observation, whole-body collisions.</div>
+<details class="code"><summary><b>One control step: delay, PD, physics, the velocity clip</b> <span class="path">training/RL-X/rl_x/environments/custom_mujoco/robocup_soccer/kick/mjx/environment.py:427</span></summary><pre><span class="ln"> 427</span>      def _step(self, state, action):
+<span class="ln"> 428</span>          key, domain_randomization_key, command_sampling_key, command_key, observation_key, terrain_key = jax.random.split(state.key, 6)
+<span class="ln"> 429</span>          state = state.replace(key=key)
+<span class="ln"> 430</span>  
+<span class="ln"> 431</span>          chosen_action = action[:self.nr_actuator_joints]
+<span class="ln"> 432</span>          delayed_actions = self.domain_randomization_action_delay_function.delay_action(chosen_action, state.internal_state)
+<span class="ln"> 433</span>  
+<span class="ln"> 434</span>          data, _ = jax.lax.scan(
+<span class="ln"> 435</span>              f=lambda data, delayed_action: (mjx.step(state.mjx_model, data.replace(ctrl=self.control_function.process_action(delayed_action, state.internal_state))), None),
+<span class="ln"> 436</span>              init=state.data,
+<span class="ln"> 437</span>              xs=delayed_actions,
+<span class="ln"> 438</span>              unroll=True
+<span class="ln"> 439</span>          )
+<span class="ln"> 440</span>          # Non-physical: resets joint speeds to the motor limits after every control step. The competition server has
+<span class="ln"> 441</span>          # no such clip, and kick v2 learned to lean on it (falls 12/12 in the server, experiments/kick_server/README.md).
+<span class="ln"> 442</span>          if self.env_config.get(&quot;clip_joint_velocities&quot;, True):
+<span class="ln"> 443</span>              max_qvel = 100 * jnp.ones(self.initial_mj_model.nv)
+<span class="ln"> 444</span>              max_qvel = max_qvel.at[self.actuator_joint_mask_qvel].set(state.internal_state[&quot;actuator_joint_max_velocities&quot;])
+<span class="ln"> 445</span>              data = data.replace(qvel=jnp.clip(data.qvel, -max_qvel, max_qvel))
+<span class="ln"> 446</span>  
+<span class="ln"> 447</span>          state.internal_state[&quot;imu_orientation_rotation&quot;] = Rotation.from_matrix(data.site_xmat[self.imu_site_id].reshape(3, 3))</pre></details><details class="code"><summary><b>Ablation: adding the training clip to the server</b> <span class="path">experiments/kick_server/ablations.py:130</span></summary><pre><span class="ln"> 130</span>  def clip_velocities(sim):
+<span class="ln"> 131</span>      &quot;&quot;&quot;RL-X kick _step(): qvel clipped to the actuator max velocities (actuated joints) and to 100 elsewhere.&quot;&quot;&quot;
+<span class="ln"> 132</span>      d = sim.mj_data
+<span class="ln"> 133</span>      pre = agent_prefix(sim)
+<span class="ln"> 134</span>      for name, vmax in zip(JOINT_ORDER, MAXVEL):
+<span class="ln"> 135</span>          j = d.joint(pre + name)
+<span class="ln"> 136</span>          j.qvel[0] = float(np.clip(j.qvel[0], -vmax, vmax))
+<span class="ln"> 137</span>      root = d.joint(pre + &#x27;root&#x27;)
+<span class="ln"> 138</span>      root.qvel[:] = np.clip(root.qvel, -100, 100)
+<span class="ln"> 139</span>      b = d.joint(&#x27;ball-root&#x27;)
+<span class="ln"> 140</span>      b.qvel[:] = np.clip(b.qvel, -100, 100)
+<span class="ln"> 141</span>      return np.array([d.joint(pre + n).qvel[0] for n in JOINT_ORDER])</pre></details><details class="code"><summary><b>Training ball vs the server ball</b> <span class="path">training/RL-X/rl_x/environments/custom_mujoco/robocup_soccer/kick/mjx/environment.py:52</span></summary><pre><span class="ln">  52</span>          if env_config.get(&quot;server_ball&quot;, False):
+<span class="ln">  53</span>              # the competition server&#x27;s ball (rcssservermj soccer/ball_5.xml): lighter, more rolling resistance, stiff contact
+<span class="ln">  54</span>              ball.add(&quot;geom&quot;, name=&quot;ball&quot;, type=&quot;sphere&quot;, size=f&quot;{self.ball_radius}&quot;, mass=&quot;0.43&quot;, contype=&quot;1&quot;, conaffinity=&quot;1&quot;,
+<span class="ln">  55</span>                       condim=&quot;6&quot;, friction=&quot;0.4 0.01 0.01&quot;, priority=&quot;1&quot;, solref=&quot;-5000 -20&quot;, rgba=&quot;1 1 1 1&quot;)
+<span class="ln">  56</span>          else:
+<span class="ln">  57</span>              ball.add(&quot;geom&quot;, name=&quot;ball&quot;, type=&quot;sphere&quot;, size=f&quot;{self.ball_radius}&quot;, mass=&quot;0.45&quot;, contype=&quot;1&quot;, conaffinity=&quot;1&quot;,
+<span class="ln">  58</span>                       condim=&quot;6&quot;, friction=&quot;0.7 0.005 0.005&quot;, rgba=&quot;1 1 1 1&quot;)
+<span class="ln">  59</span>          home_key = xml_handle.find(&quot;key&quot;, &quot;home&quot;)</pre></details>
+<p class="note">The same clip is in the get-up and walk envs. The shipped walk survives in the server because walking is gentle and rarely reaches the limits.</p>
+</section>
+
+<section id="fix"><div class="k">5 · The fix</div><h2>Retrain without the clip, with the server ball, then with match delay</h2>
+<table><tr><th>In the unmodified server, 12 trials</th><th>v2</th><th>v4 (no clip + server ball)</th><th>v5 (+ 20 ms delay)</th></tr>
+<tr><td>True ball, no delay</td><td class="bad">12/12 falls · 3.5 m</td><td class="good">0/12 falls · 20.1 m</td><td class="good">0/12 falls · 16.9 m</td></tr>
+<tr><td>True ball, <b>match timing</b> (+20 ms)</td><td class="bad">12/12 falls · 1.9 m</td><td class="bad">12/12 falls · 1.8 m</td><td class="good">1/12 falls · 20.3 m · 12.3 m/s · 3.3°</td></tr>
+<tr><td>Camera ball, match timing</td><td class="bad">12/12 falls · 5.0 m</td><td class="bad">12/12 falls · 4.0 m</td><td class="bad">10/12 falls · 13.5 m</td></tr></table>
+<p class="note">v4 = 25 min of fine-tuning from v2 on a laptop CPU; v5 = v4 + ~2.5 h with the delay always on (~6M steps total, about 200× less than a GPU run). Every checkpoint was tested in the server: v4 kept training and got worse (5/12 falls), so the best snapshot was kept, not the last.</p>
+<details class="code"><summary><b>Action delay grows with the curriculum</b> <span class="path">training/RL-X/rl_x/environments/custom_mujoco/robocup_soccer/kick/mjx/domain_randomization/action_delay_functions/default.py:25</span></summary><pre><span class="ln">  25</span>      def sample(self, internal_state, should_randomize, key):
+<span class="ln">  26</span>          effective_max_delay_substeps = self.min_delay_substeps + jnp.floor(internal_state[&quot;env_curriculum_coeff&quot;] * (self.max_delay_substeps - self.min_delay_substeps)).astype(jnp.int32)
+<span class="ln">  27</span>          sampled_delay_steps = jax.random.randint(key, (), self.min_delay_substeps, effective_max_delay_substeps + 1)
+<span class="ln">  28</span>          internal_state[&quot;action_delay_steps&quot;] = jnp.where(should_randomize, sampled_delay_steps, internal_state[&quot;action_delay_steps&quot;])</pre></details>
+<div class="grid2"><figure><video src="media/server_kick_v5_match_delay.mp4" controls muted loop playsinline preload="metadata"></video><figcaption>Kick v5, server, match timing: kicks and stays up.</figcaption></figure>
+<figure><video src="media/server_kick_v5_camera_delay.mp4" controls muted loop playsinline preload="metadata"></video><figcaption>Kick v5, server, camera ball: kick lands, then it loses balance.</figcaption></figure></div>
+<div class="callout"><b>Still broken: the camera.</b> The server's vision is not ideal: 60° half field of view, angle and distance noise, misses, every second cycle. The ball at the feet is only visible with the head pitched down, and right after contact it leaves the view, so the policy sees a stale ball and falls. It was trained with a perfect ball position 50× a second. Fix: train with a camera-like ball (teacher-student, as in UT Austin's T1 striker paper, arXiv 2512.06571).</div>
+</section>
+
+<section id="getup"><div class="k">6 · Get-up</div><h2>Stuck at kneeling</h2>
+<table><tr><th>RL-X get-up, 64 episodes of 10 s</th><th>Standing at the end</th></tr>
+<tr><td>From near-upright starts</td><td class="good">64/64</td></tr><tr><td>From lying</td><td class="bad">0/64</td></tr></table>
+<p>It reaches sitting/kneeling and stops: sitting already earns height reward, and standing up needs a forceful, risky motion. Plan if I continue mine: always start fallen, two-stage reward (HumanUP, arXiv 2502.12152), no velocity clip. A GPU run of that is training now.</p>
+</section>
+
+<section id="next"><div class="k">7 · Next</div><h2>Make the kick usable in a full team, or drop it with data</h2>
+<ol><li>Train with a camera-like ball (noise, 25 Hz, ball lost after contact).</li>
+<li>Start episodes from the walk policy's stopping poses, not a perfect standing pose.</li>
+<li>Train on the GPU (kick v5 job running now on an A100).</li>
+<li>Compare kicks on the test tool (same 12 setups: speed, accuracy, falls, time to kick) and keep whichever wins in each situation.</li>
+<li>Use the test tool on team problems: falls per match, measuring the tactics layer over many matches.</li></ol>
+<div class="callout"><b>Brazil Open: we can still enter.</b> Marco Simões (league) replied on 8 Oct: registration is still open for remote foreign teams through the Olimpo system (olimpo.robocup.org.br); problems go to the 3D simulation chair (adailton.junior@gmail.com, cc cbr@robocup.org.br). CBR 2026 runs 23-29 Nov and lists <b>RoboCup Simulation 3D</b> as a category (chair Adailton Junior; 2026 rules: 7 vs 7, 2 × 5 min, T1/K1, rcssservermj on Ubuntu 24.04, binaries delivered with start/kill scripts). Remote non-Brazilian team of 4: <b>US$ 230</b> (US$ 190 with RoboCup Brasil membership), PayPal. Payment is only accepted after the team's <b>TDP is accepted</b>, so we likely need a TDP: confirm with the chair. Decision for the team: register, who writes the TDP?</div>
+<p><b>Questions:</b> Do we register for the Brazil Open, and who does it? Title of the mocap → imitation → style paper? What does the orchestrator need from a kick?</p>
+</section>
+
+<section id="files"><div class="k">Files</div><h2>Where everything is</h2>
+<ul>
+<li><code>training/RL-X/rl_x/environments/custom_mujoco/robocup_soccer/kick/mjx/environment.py</code> (kick env) · <code>training/RL-X/rl_x/environments/custom_mujoco/robocup_soccer/kick/mjx/reward_functions/kick.py</code> (kick reward) · <code>training/RL-X/rl_x/environments/custom_mujoco/robocup_soccer/kick/mjx/default_config.py</code> (kick config) · <code>training/RL-X/rl_x/algorithms/ppo_gru/flax_full_jit/ppo_gru.py</code> (PPO-GRU)</li>
+<li><code>experiments/kick_server/README.md</code> (server test tool README) (full results) · <code>experiments/kick_server/kick_trials.py</code> (kick_trials.py) · <code>experiments/kick_server/ablations.py</code> (ablations.py) · <code>experiments/kick_server/render_trials.py</code> (render_trials.py)</li>
+<li><code>training/eval_kick.py</code> (eval_kick.py) · <code>training/eval_getup.py</code> (eval_getup.py) · <code>training/hpc_2026-10-09/</code> (GPU job kit)</li>
+<li><code>book/meeting_2026-10-09/techniques_research.md</code> (techniques research (sources))</li>
+</ul></section>
+</main></body></html>
