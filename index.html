@@ -47,33 +47,28 @@ a{color:var(--accent)}
 
 <h2>Kick: what I tried, and why each one failed</h2>
 
-<div class="card"><h3>Step 1 · Training on normal computers</h3>
-<p><span class="bad">Way too slow</span>: about 500 practice steps per second.</p>
-<div class="why">Why: the tools are built for graphics cards (GPUs), not normal processors.</div>
-<p>So: moved to a big GPU. 4,096 robots practising at once, 75,000 steps per second.</p></div>
-
-<div class="card"><h3>Step 2 · Kick v1: the robot cheated</h3>
+<div class="card"><h3>Step 1 · Kick v1: the robot cheated</h3>
 <p><span class="bad">The score went up, but it wasn't kicking.</span></p>
 <div class="why">Why: it learned to stomp the ball into the floor until the physics glitched and the ball "flew" at crazy speed. Points for ball speed, so the cheat paid. That's reward hacking.</div>
 <p>So: stop the try when physics glitches, and cap the points.</p></div>
 
-<div class="card"><h3>Step 3 · Kick v2: a real kick</h3>
+<div class="card"><h3>Step 2 · Kick v2: a real kick</h3>
 <p><span class="good">Leans, swings, ball flies about 28 m. 64 out of 64 tries.</span></p>
 <p><span class="bad">But if it starts a little tilted or moving, it falls 45 out of 64 times.</span></p>
 <div class="why">Why: it never practised messy starts. The easy-to-hard practice (curriculum) never got harder, because my "success" rule said the ball must go 1 to 15 m. The kick went 28 m, so every good kick counted as a failure. Oops.</div>
 <p>So: success now = ball goes at least 1 m and the robot doesn't fall. Then the practice started getting harder like it should.</p></div>
 
-<div class="card"><h3>Step 4 · Kick v2 in the real match server</h3>
+<div class="card"><h3>Step 3 · Kick v2 in the real match server</h3>
 <p><span class="bad">Falls 12 out of 12 times.</span> Perfect in practice, useless in the stadium.</p>
 <div class="why">Why: the practice simulator secretly slows every joint down to its speed limit after each step. Like a safety rope on your arm. The real server has no rope. So the robot learned to swing as hard as possible, and in the real server the swing throws it over.</div>
 <p>How I know: I added only that "rope" to the server and falls went from 12 to 1. The ball was also a bit different (weight, bounce).</p>
 <video src="media/server_kick_v2_falls.mp4" controls muted preload="metadata"></video></div>
 
-<div class="card"><h3>Step 5 · Kick v4: practise without the rope</h3>
+<div class="card"><h3>Step 4 · Kick v4: practise without the rope</h3>
 <p><span class="good">In the server: 0 falls out of 12.</span> <span class="bad">But with the real match delay, 12 falls again.</span></p>
 <div class="why">Why: in a real match your command arrives 20 milliseconds late. It had never practised with that delay.</div></div>
 
-<div class="card"><h3>Step 6 · Kick v5: practise with the delay too</h3>
+<div class="card"><h3>Step 5 · Kick v5: practise with the delay too</h3>
 <p><span class="good">In the server with the match delay: 11 out of 12 kicks, 1 fall, about 20 m, almost straight at the target.</span></p>
 <p>Lesson: longer practice isn't always better. v4 got worse when it trained longer, so I tested every saved version in the server.</p>
 <video src="media/server_kick_v5_match_delay.mp4" controls muted preload="metadata"></video></div>
