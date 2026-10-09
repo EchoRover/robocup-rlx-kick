@@ -35,7 +35,7 @@ code{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:var(--co
 <div class="kpi"><b>20 m · 3°</b><span>v5 median distance, off target</span></div>
 <div class="kpi"><b class="bad">10/12</b><span>falls when using the camera (open)</span></div>
 </div></header>
-<nav><div><a href="#trained">1 What I trained</a><a href="#train">2 Training results</a><a href="#server">3 In the server</a><a href="#why">4 Why it broke</a><a href="#fix">5 Fix</a><a href="#getup">6 Get-up</a><a href="#karthik">7 vs Karthik's stack</a><a href="#next">8 Next</a><a href="#files">Files</a></div></nav>
+<nav><div><a href="#trained">1 What I trained</a><a href="#train">2 Training results</a><a href="#server">3 In the server</a><a href="#why">4 Why it broke</a><a href="#fix">5 Fix</a><a href="#getup">6 Get-up</a><a href="#karthik">7 Team</a><a href="#next">8 Next</a><a href="#files">Files</a></div></nav>
 <main>
 
 <section id="trained"><div class="k">1 · What I trained</div><h2>A kick policy: PPO with a GRU memory, in RL-X</h2>
@@ -44,7 +44,7 @@ code{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:var(--co
 <div class="stage"><b>Observation (91 values, 50 Hz)</b>23 joint angles · 23 joint speeds · last action · gyro · gravity direction (tilt) · gait clock · ball position + velocity relative to the body</div><div class="arr">→</div>
 <div class="stage"><b>Policy network</b>GRU memory + MLP. Starts random; PPO improves it.</div><div class="arr">→</div>
 <div class="stage"><b>Action (23 values)</b>target angle = standing pose + 0.5 × action</div><div class="arr">→</div>
-<div class="stage"><b>PD controller</b>torque = 25·(target − angle) − 0.6·speed. Same convention as Karthik's walk and kick.</div>
+<div class="stage"><b>PD controller</b>torque = 25·(target − angle) − 0.6·speed.</div>
 </div>
 <details class="code"><summary><b>Action to target angle (PD control)</b> <span class="path">training/RL-X/rl_x/environments/custom_mujoco/robocup_soccer/kick/mjx/control_functions/pd.py:10</span></summary><pre><span class="ln">  10</span>      def process_action(self, action, internal_state):
 <span class="ln">  11</span>          scaled_action = action * internal_state[&quot;scaling_factor&quot;]
@@ -78,7 +78,7 @@ code{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:var(--co
 <span class="ln"> 615</span>              self.critic_exteroception_obs_idx,
 <span class="ln"> 616</span>              self.ball_obs_idx,
 <span class="ln"> 617</span>          ], dtype=int)</pre></details>
-<p>The <b>critic</b> (which only exists during training, to judge how good a state is) sees extra information the policy does not: foot contacts, body velocity, height over ground. That is the same idea as a "privileged critic".</p>
+<p>The <b>critic</b> (which only exists during training, to judge how good a state is) sees extra information the policy does not: foot contacts, body velocity, height over ground. This is usually called a privileged or asymmetric critic.</p>
 <h3>Reward: what counts as good</h3>
 <table><tr><th>Term</th><th>Per second</th><th>Why</th></tr>
 <tr><td>Ball speed toward the target</td><td>3 × speed (capped at 6 m/s)</td><td>the actual goal: kick it hard, in the right direction</td></tr>
@@ -168,7 +168,7 @@ code{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:var(--co
 <span class="ln"> 206</span>                          # Critic loss
 <span class="ln"> 207</span>                          new_value = self.critic.apply(critic_params, state_seq).squeeze(-1)
 <span class="ln"> 208</span>                          critic_loss = 0.5 * (new_value - return_seq) ** 2</pre></details>
-<div class="callout"><b>Is this standard?</b> Yes. PPO + joint-position targets with PD control + a privileged critic + curriculum + domain randomisation is the standard recipe for legged robots (RL-X, Isaac Lab, legged_gym). Karthik's stack uses the same family.</div>
+<div class="callout"><b>Is this standard?</b> Yes. PPO + joint-position targets with PD control + a privileged critic + curriculum + domain randomisation is the standard recipe for legged robots (RL-X, Isaac Lab, legged_gym).</div>
 </section>
 
 <section id="train"><div class="k">2 · Results in training</div><h2>Near perfect from calm starts, fragile from messy ones</h2>
@@ -296,18 +296,11 @@ code{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:var(--co
 <section id="getup"><div class="k">6 · Get-up</div><h2>Stuck at kneeling</h2>
 <table><tr><th>RL-X get-up, 64 episodes of 10 s</th><th>Standing at the end</th></tr>
 <tr><td>From near-upright starts</td><td class="good">64/64</td></tr><tr><td>From lying</td><td class="bad">0/64</td></tr></table>
-<p>It reaches sitting/kneeling and stops: sitting already earns height reward, and standing up needs a forceful, risky motion. Karthik's get-up works (206/206 within 5 s); it sets targets relative to the current joint angle with very stiff gains, which is probably the difference. Plan if continued: always start fallen, two-stage reward (HumanUP, arXiv 2502.12152), no velocity clip. A GPU run of that is training now.</p>
+<p>It reaches sitting/kneeling and stops: sitting already earns height reward, and standing up needs a forceful, risky motion. Karthik's stack has its own get-up (see his page). Plan if I continue mine: always start fallen, two-stage reward (HumanUP, arXiv 2502.12152), no velocity clip. A GPU run of that is training now.</p>
 </section>
 
-<section id="karthik"><div class="k">7 · Compared with Karthik's stack</div><h2>Same family of method, his is further along</h2>
-<table><tr><th></th><th>This work (RL-X)</th><th>Karthik's stack</th></tr>
-<tr><td>Algorithm</td><td>PPO, GRU policy</td><td>PPO, recurrent policy</td></tr>
-<tr><td>Action</td><td>standing + 0.5·a, kp 25, kd 0.6</td><td>same for walk and kick; get-up: current angle + 0.6·a, kp at torque cap</td></tr>
-<tr><td>Critic</td><td>privileged (extra inputs)</td><td>privileged</td></tr>
-<tr><td>Parallel robots</td><td>4,096 (GPU) / 64 (laptop)</td><td>8,192 per GPU</td></tr>
-<tr><td>Kick in the server</td><td>standing start, true ball: 1/12 falls; camera: 10/12 falls</td><td>165/165 goals from 10 m in his tests</td></tr>
-<tr><td>Get-up</td><td>0/64 from lying</td><td>206/206</td></tr></table>
-<p>What this work adds for the team: a measured explanation of why RL-X-trained policies break in the server, and a test tool that runs any skill in the unmodified server on fixed setups.</p>
+<section id="karthik"><div class="k">7 · Relation to Karthik's stack</div><h2>His stack is further along; he presents it himself</h2>
+<p>Karthik has his own skills, orchestrator and match results (<a href="https://velluu.github.io/robocup-t1/">velluu.github.io/robocup-t1</a>). I am not reporting his numbers here. What this work adds for the team: a measured explanation of why RL-X-trained policies break in the server, and a test tool that runs any skill in the unmodified server on fixed setups, so different kicks can be compared on equal terms.</p>
 </section>
 
 <section id="next"><div class="k">8 · Next</div><h2>Make the kick something Karthik's orchestrator can use, or drop it with data</h2>
