@@ -24,6 +24,18 @@ a{color:var(--accent)}
 <h1>RL-X kick and get-up: what I tried and why each step failed</h1>
 <p class="sub">Evan Tobias · ACOD310 RoboCup 3D (Booster T1) · 9 Oct 2026 · <a href="details.html">full details, tables and code</a></p>
 
+<h2>The method (same for kick and get-up)</h2>
+<div class="step">
+<div class="row"><b>Approach</b><div>Reinforcement learning: the robot practises in simulation and gets a score (reward) every step. Nobody programs the motion; it is found by trial and error.</div>
+<b>Algorithm</b><div><b style="color:var(--ink);text-transform:none;letter-spacing:0">PPO</b> (Proximal Policy Optimization): after each batch of attempts, make actions that went better than expected more likely, but cap how much the policy can change per update so training stays stable.</div>
+<b>Network</b><div>A small neural network with a <b style="color:var(--ink);text-transform:none;letter-spacing:0">GRU</b> (short-term memory), so it can track things one snapshot can't show: where it is in the motion, how the ball is moving, its 20 ms command delay.</div>
+<b>Inputs</b><div>91 numbers, 50 times a second: 23 joint angles, 23 joint speeds, its last action, gyro, gravity direction (how tilted it is), a gait clock, and the ball's position and velocity relative to its body.</div>
+<b>Outputs</b><div>23 numbers, one per joint. Target angle = standing pose + 0.5 × output. A PD controller (kp 25, kd 0.6) turns the target into motor torque.</div>
+<b>Critic</b><div>During training only, a second network (the critic) judges how good each moment is. It gets extra inputs the robot won't have in a match (foot contacts, body velocity). This is called a privileged critic.</div>
+<b>Training</b><div>Library: RL-X (JAX). Physics: MJX (MuJoCo running on the GPU). 4,096 robots in parallel on one A100, ~75,000 steps per second. Kick v2: ~1.7 billion steps.</div>
+<b>Curriculum</b><div>Starts easy (standing still, ball at the feet) and gets messier as the robot succeeds: tilts, joints off pose, body moving, command delay.</div>
+<b>Standard?</b><div class="good">Yes. PPO + joint-angle targets with PD control + privileged critic + curriculum + randomisation is the standard recipe for training legged robots (RL-X, Isaac Lab, legged_gym).</div></div></div>
+
 <h2>Kick</h2>
 
 <div class="step"><div class="when">24 Sep · try 1</div>
