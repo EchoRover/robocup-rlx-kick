@@ -28,8 +28,8 @@ a{color:var(--accent)}
 <ul>
 <li>In practice (the training simulator) this kick was near perfect: ball flies about 28 m, robot stays up.</li>
 <li>In the real match server it <b>falls 12 out of 12 times</b>.</li>
-<li><b>Why:</b> the practice simulator secretly slows every joint down to its speed limit after each step, like a safety rope. The real server has no rope. So the robot learned to swing as hard as it can, and in the real server that swing throws it over.</li>
-<li><b>How I know:</b> I added only that "rope" to the server, nothing else, and falls went from 12 to 1.</li>
+<li><b>Why:</b> the training simulator clips every joint's velocity to the motor's velocity limit after each control step. The real server does not. The policy learned to rely on that clipping, so in the server its joints exceed their limits (2 to 3.7×) and the robot falls.</li>
+<li><b>How I know:</b> adding only the velocity clipping to the server, nothing else, reduced falls from 12/12 to 1/12.</li>
 </ul>
 </section>
 
@@ -37,9 +37,9 @@ a{color:var(--accent)}
 <h2 class="good">2 · After: it kicks in the real server</h2>
 <video src="media/server_kick_v5_match_delay.mp4" controls muted preload="metadata"></video>
 <ul>
-<li><b>What I changed:</b> retrained with the rope removed, with the server's real ball, and with the 20 ms delay a real match has.</li>
+<li><b>What I changed:</b> disabled joint velocity clipping in training, used the server's ball model, and added the server's 20 ms action delay. Then retrained.</li>
 <li><b>Result in the real server: 11 out of 12 kicks, only 1 fall, about 20 m, almost straight at the target.</b></li>
-<li>Still to fix: with the robot's own camera it kicks and then falls, because the ball disappears from view right after the kick. Next: practise with a camera that's just as bad.</li>
+<li>Still to fix: with the robot's own camera it kicks and then falls, because the ball disappears from view right after the kick. Next: train with simulated camera noise and ball dropouts.</li>
 </ul>
 </section>
 
@@ -47,10 +47,10 @@ a{color:var(--accent)}
 <h2 class="bad">3 · Why it doesn't get up</h2>
 <video src="media/getup_from_lying.mp4" controls muted preload="metadata"></video>
 <ul>
-<li>It starts lying down, gets to <b>kneeling, and stays down</b>. From lying: 0 out of 64. From a small wobble: 64 out of 64.</li>
-<li><b>Reason 1, it barely practised lying down:</b> practice only gets harder after a streak of successes. It kept failing, so it mostly practised small wobbles.</li>
-<li><b>Reason 2, kneeling is "good enough":</b> kneeling already earns most of the points (head fairly high, body fairly upright). Standing up needs one big, forceful push, and I give minus points for forceful moves. So it settles for kneeling.</li>
-<li><b>Fix running now on the GPU:</b> always start lying down, and much smaller minus points for force, so it can push hard first and get smooth later.</li>
+<li>It starts lying down, gets to <b>kneeling, and stays down</b>. From lying: 0 out of 64. From near-upright: 64 out of 64.</li>
+<li><b>Reason 1, curriculum stalled:</b> the starting tilt only increases after a streak of successes. Success rate was about 55%, so it stayed at small tilts (about 15°) and rarely trained from lying.</li>
+<li><b>Reason 2, local optimum:</b> kneeling already earns most of the reward (torso height and uprightness). Standing up needs a high-torque motion, and the reward penalises torque and joint velocity. So the policy settles at kneeling.</li>
+<li><b>Fix running now on the GPU:</b> always start from lying, and reduce the torque and joint-velocity penalties 10× (first stage of the HumanUP method).</li>
 </ul>
 </section>
 </main></body></html>
